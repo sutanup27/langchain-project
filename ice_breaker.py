@@ -48,35 +48,42 @@
 
 from langchain.prompts.prompt import PromptTemplate
 from langchain_openai import ChatOpenAI
+from social_scrap.linkedin_scrap import scrape_linkedin_profile
+from agents.linkedin_lookup_agent import lookup
+from tools.output_parsers import Summary, summary_parser
 from dotenv import load_dotenv
-
 import os
-information="""
-Jadavpur University (abbr. JU)[5] is a public state funded technical and research university with its main campus located at Jadavpur, Kolkata, West Bengal, India. It was established on 25 July in 1906 as Bengal Technical Institute and was converted into Jadavpur University on 24 December in 1955.[6] As of the 2024 NIRF rankings, Jadavpur University has been ranked 9th among universities, 12th among engineering institutes, and 17th overall in India.[7] Also Nature Index ranked Jadavpur University in 1st among universities in India and 22nd overall in India in terms of research output (2023-2024). The university has been recognized by the UGC as an institute with "Potential for Excellence"[8] and accredited an "A+" grade by the National Assessment and Accreditation Council (NAAC).[9][10]
 
-History
 
-Stamp featuring Jadavpur University
-On 25 July 1906, Bengal Technical Institute was founded by Society for the Promotion of Technical Education by at 92, Upper Circular Road. On 7 July 1910, the Society for the Promotion of Technical Education in Bengal was merged with the National Council of Education (NCE).[11] The institute became College of Engineering and Technology, Bengal looked after by NCE.[12][13] After Independence, on 24 December 1955, Jadavpur University was officially established by the Government of West Bengal with the concurrence of the Government of India.[6]
-"""
+load_dotenv()
 
-if __name__ == "__main__":
-    print("hello langchain")
-
+def ice_break_with(name: str) -> tuple[Summary,str]:
     summary_template = """
     given the Linkedin information {information} about a person I want you to create:
     1. A short summary
     2. two interesting facts about them
+
+     \n{format_instructions}
     """
 
     summary_prompt_template = PromptTemplate(
-        input_variables=["information"], template=summary_template
+        input_variables=["information"], template=summary_template,
+        partial_variables={"format_instructions":summary_parser.get_format_instructions()}
     )
 
-    llm = ChatOpenAI(temperature=0, model_name="gpt-4o-mini",api_key=os.getenv("OPENAI_API_KEY"))
+    llm = ChatOpenAI(temperature=0, model_name="gpt-4o-mini",api_key=os.environ["OPENAI_API_KEY"])
 
-    chain = summary_prompt_template | llm
- 
-    res = chain.invoke(input={"information": information})
+    chain = summary_prompt_template | llm | summary_parser
+    
+    linkedin_url=lookup(name)
+    linkedin_data=scrape_linkedin_profile(linkedin_url)
+    res:Summary = chain.invoke(input={"information": linkedin_data})
 
+    return res, linkedin_data.get("photoUrl")
+
+if __name__ == "__main__":
+    print("hello langchain")
+    name="Amrita CHandra DUblin"
+    res, photo=ice_break_with(name)
     print(res)
+    print(photo)
